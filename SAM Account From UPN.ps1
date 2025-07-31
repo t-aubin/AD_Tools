@@ -1,46 +1,26 @@
-# Email-to-SAMAccountName.ps1
-# Input: List of UPNs (emails)
-# Output: UPN with corresponding SAMAccountName
+# Requires: ActiveDirectory module
+# Input: Full logon name (User Principal Name)
 
-function Get-SAMAccountNamesFromUPNs {
-    [CmdletBinding()]
-    param (
-        [Parameter(ValueFromPipeline = $true)]
-        [string[]]$UserPrincipalNames
-    )
+param (
+    [Parameter(Mandatory = $true)]
+    [string]$UserPrincipalName
+)
 
-    begin {
-        if (-not (Get-Module ActiveDirectory)) {
-            Import-Module ActiveDirectory
-        }
-        $results = @()
+# Import AD module if not already loaded
+if (-not (Get-Module -Name ActiveDirectory)) {
+    Import-Module ActiveDirectory
+}
+
+try {
+    # Query AD for the user with the given UPN
+    $user = Get-ADUser -Filter "UserPrincipalName -eq '$UserPrincipalName'" -Properties SamAccountName
+
+    if ($user) {
+        Write-Output "SAMAccountName (pre-Windows 2000 logon name) for '$UserPrincipalName' is: $($user.SamAccountName)"
+    } else {
+        Write-Warning "No user found with UserPrincipalName: $UserPrincipalName"
     }
-
-    process {
-        foreach ($upn in $UserPrincipalNames) {
-            $cleanUpn = $upn.Trim()
-            if ($cleanUpn) {
-                try {
-                    $user = Get-ADUser -Filter "UserPrincipalName -eq '$cleanUpn'" -Properties SamAccountName
-                    if ($user) {
-                        $results += [PSCustomObject]@{
-                            UserPrincipalName = $cleanUpn
-                            SAMAccountName    = $user.SamAccountName
-                        }
-                    } else {
-                        $results += [PSCustomObject]@{
-                            UserPrincipalName = $cleanUpn
-                            SAMAccountName    = "NOT FOUND"
-                        }
-                    }
-                } catch {
-                    Write-Warning "Error looking up $cleanUpn: $_"
-                }
-            }
-        }
-    }
-
-    end {
-        $results | Format-Table -AutoSize
-    }
+}
+catch {
+    Write-Error "An error occurred: $_"
 }
