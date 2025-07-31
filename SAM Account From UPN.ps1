@@ -1,5 +1,6 @@
-# Requires: ActiveDirectory module
-# Input: A list of UPNs (pasted into the console or piped from a file)
+# Email-to-SAMAccountName.ps1
+# Input: List of UPNs (emails)
+# Output: UPN with corresponding SAMAccountName
 
 function Get-SAMAccountNamesFromUPNs {
     [CmdletBinding()]
@@ -8,39 +9,38 @@ function Get-SAMAccountNamesFromUPNs {
         [string[]]$UserPrincipalNames
     )
 
-    # Import AD module if not already loaded
-    if (-not (Get-Module -Name ActiveDirectory)) {
-        Import-Module ActiveDirectory
+    begin {
+        if (-not (Get-Module ActiveDirectory)) {
+            Import-Module ActiveDirectory
+        }
+        $results = @()
     }
 
     process {
         foreach ($upn in $UserPrincipalNames) {
-            $upn = $upn.Trim()
-            if ($upn) {
+            $cleanUpn = $upn.Trim()
+            if ($cleanUpn) {
                 try {
-                    $user = Get-ADUser -Filter "UserPrincipalName -eq '$upn'" -Properties SamAccountName
+                    $user = Get-ADUser -Filter "UserPrincipalName -eq '$cleanUpn'" -Properties SamAccountName
                     if ($user) {
-                        [PSCustomObject]@{
-                            UserPrincipalName = $upn
+                        $results += [PSCustomObject]@{
+                            UserPrincipalName = $cleanUpn
                             SAMAccountName    = $user.SamAccountName
                         }
                     } else {
-                        [PSCustomObject]@{
-                            UserPrincipalName = $upn
+                        $results += [PSCustomObject]@{
+                            UserPrincipalName = $cleanUpn
                             SAMAccountName    = "NOT FOUND"
                         }
                     }
                 } catch {
-                    Write-Warning "Error querying UPN '$upn': $_"
+                    Write-Warning "Error looking up $cleanUpn: $_"
                 }
             }
         }
     }
-}
 
-# Example usage: manually pasted list
-@(
-    "jane.doe@yourdomain.com"
-    "john.smith@yourdomain.com"
-    "missing.user@yourdomain.com"
-) | Get-SAMAccountNamesFromUPNs | Format-Table -AutoSize
+    end {
+        $results | Format-Table -AutoSize
+    }
+}
